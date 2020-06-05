@@ -1,0 +1,341 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(janitor)
+library(tidyr)
+```
+
+### Load data
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+* * *
+
+## Part 1: Data
+
+The Behavioral Risk Factor Surveillance System (BRFSS) is a project that extends to all states of the United States and territories and is intended to collect state data on health and risk behavior are linked to preventable chronic diseases, injuries and infectious diseases affecting the adult population.
+
+The data analyzed in this document are from the survey conducted by BRFSS in 2013 aimed at the population of 18 years or older residing in the US.
+
+The research was done through the connections to landlines and cell phones using techniques of disproportionate stratified sampling and random sampling, consequently, the data can be generalized to a larger population, on the other hand, no causal conclusion can be made since it is not about an experimental rather than an observational study.
+
+Variables used in this analysis
+
+* `diabete3: (Ever Told) You Have Diabetes`
+* `_state: State Fips Code`
+* `chccopd1: (Ever Told) You Have (Copd) Chronic Obstructive Pulmonary Disease`
+* `smokday2: Frequency Of Days Now Smoking`
+* `sleptim1: How Much Time Do You Sleep`
+*  `asnoslep: Sleep Difficulty Due To Asthma During Past 30 Days`
+*  `asthnow: Still Have Asthma`
+
+References
+
+* BRFSS web site: http://www.cdc.gov/brfss/
+* BRFSS Questionnaire (Mandatory and Optional Modules): http://www.cdc.gov/brfss/questionnaires/pdf-ques/2013%20BRFSS_English.pdf
+* BRFSS Codebook: http://www.cdc.gov/brfss/annual_data/2013/pdf/CODEBOOK13_LLCP.pdf
+* BRFSS Guide to Calculated Variables: http://www.cdc.gov/brfss/annual_data/2013/pdf/2013_Calculated_Variables_Version15.pdf
+* BRFSS Guide to Optional Modules Used, by State: http://apps.nccd.cdc.gov/BRFSSModules/ModByState.asp?Yr=2013
+
+
+* * *
+
+## Part 2: Research questions
+
+**Research question 1:**
+  Which states have the highest and lowest proportion of people with diabetes?
+  
+  Since it is interesting to investigate the reason why there are diferent indexes of 
+  residents with diabetes among States, it is important to organize and order the data
+  so that it is possible to verify the distribution of proportion of people with  diabetes for each State order to find a relationship between the variables in more robust analyzes.  
+  
+
+**Research question 2: **
+  Is Chronic Obstructive Pulmonary Disease more common in smokers?
+  
+  For this research question, we will analyze the relationship between smokers respondents and respondents who said they had some Chronic Obstructive Pulmonary Disease. 
+  Finally, it will be verified in which sex the diseases are most common.
+
+**Research question 3:**
+  What is the average sleep time of people who have asthma but did not have any difficulty sleeping due to asthma during past 30 days?
+   
+  This analysis aims to verify if there is a relationship between having asthma and having reduced sleep mean due to asthma symptoms during sleep.
+    
+  
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+**Research question 1:**
+ Which states have the highest and lowest proportion of people with diabetes?
+ 
+ To start the exploration, a new dataframe containing the revealing variables for this analysis is created. It was selected the variables `X_state`,` diabete3` and `sex` taking care of the fields marked as NA, so this has been eliminated in the filtering so that only valid answers can be analyzed.
+ 
+
+```{r}
+#Create a df containing onlythe revealing variables
+diabetStatusResidents <- brfss2013 %>% 
+  select(X_state, diabete3, sex) %>% 
+  na.omit()
+```
+
+It is then possible to check the proportion for each response regarding diabetes status using `tabyl()` function. 
+```{r}
+# Yield the proportion for each response from diabete3
+diabetStatusResidents %>% 
+ tabyl(diabete3) %>%
+ adorn_pct_formatting(digits = 1)
+```
+
+For this approach, it will be more interesting to consider the proportion of people who actually have diabets, excluding females who said they had or had diabetes during their pregnancy. 
+
+```{r}
+#Create a new variable via mutate that contains the true diabetes status
+diabetStatusResidents <- diabetStatusResidents %>% 
+  mutate(diabetStatus = ifelse(diabete3 == "Yes", "Yes", "No" )) 
+```
+
+When looking at the proportion of responses again, the following distribution is verified
+
+```{r}
+# Yield the proportion for each response from diabete3
+diabetStatusResidents %>% 
+ tabyl(diabetStatus) %>%
+ adorn_pct_formatting(digits = 1)
+```
+
+A look at the distribution of diabetes status through the graph can reveal which sex can have the highest index of diabetes cases, even if there is a slight difference. 
+
+```{r}
+#Plot overall diabetes distribuition by sex
+diabetStatusResidents %>% 
+  ggplot(aes(x = diabetStatus, fill = sex)) +
+  geom_bar() +
+  labs(x = 'Diabete Status', y = 'Count') +
+  labs(title = 'Overall Distribution of Survey Respondents Diabete')
+```
+
+Now, take a look at proportion by state of respondents who said they had diabetes.
+
+```{r}
+#Calculate diabetes' proportion for each state 
+diabetstate_yes_proportion <- diabetStatusResidents %>% 
+  select(X_state, diabetStatus) %>% 
+  group_by(X_state) %>% 
+  summarise( yes_proportion_state = sum(diabetStatus == "Yes")/n()) %>%
+  arrange(desc(yes_proportion_state)) 
+diabetstate_yes_proportion
+
+```
+
+Once proportion distribution is obtained, it is possible to calculate a summary with the mean, median and other parameters.
+
+```{r}
+#Calculate summary of diabetes' proportion
+summary(diabetstate_yes_proportion$yes_proportion_state)
+```
+
+And plotting the histogram distribuition to check wether how distribuition looks like. 
+
+```{r}
+#Plot histogram distribuition
+diabetstate_yes_proportion %>% 
+ ggplot(aes(x = yes_proportion_state)) + 
+  geom_histogram(binwidth = 0.007) +
+  labs(x='Yes proportion', y='Count') +
+  ggtitle('Histogram Distribuition of Diabetes Dtatus With Yes Response')
+```
+
+Finally, it is possible to neatly plot the proportion by state of people who have diabetes and this visually reveals that states have the highest and lowest proportion.
+
+```{r}
+#Plot diabetes' proportion by state 
+diabetstate_yes_proportion %>% 
+  ggplot(aes(x = reorder(X_state, yes_proportion_state), y = yes_proportion_state)) + 
+  geom_bar(stat = "identity", fill = 'lightgreen') +
+  theme(text = element_text(size = 10)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  labs(x='State', y='Proportion with Diabetes') +
+  ggtitle('Proportion of Respondents with Diabetes Distributed by State')
+
+```
+
+From the plotting, the states of Puerto Rico and Alaska are the ones with the highest and lowest proportion of residents with diabetes, respectively. The values can be calculated through the functions `max ()` and `min ()`. 
+
+```{r}
+#Get max and min diabetes proportion from the dataframe
+max(diabetstate_yes_proportion$yes_proportion_state)
+min(diabetstate_yes_proportion$yes_proportion_state)
+```
+
+The values of proportion are: 
+
+ * Puerto Rico : 0.19
+ * Alaska : 0.08
+
+
+**Research question 2:**
+
+Is Chronic Obstructive Pulmonary Disease more common in male or famale smokers?
+
+To start the new exploration, a new dataframe called `smokeCopdStatus` must be created , and it contains the revealing variables for this analysis. The variables selected  are `sex`,`chccopd1` e `smokday2` and all _NA_ entries were omitted. 
+
+```{r}
+#Create a df containing only the revealing variables
+smokeCopdStatus <- brfss2013 %>% 
+  select(sex,chccopd1, smokday2) %>% 
+  na.omit()
+```
+
+Once the data is properly organized, the proportion of responses to the `smokday2` and` chccopd1` variables grouped by respondents' gender can be explored.
+
+See the proportion of responses to frequency of days now smoking. 
+
+```{r}
+# Yield the proportion for each response from smokday2
+smokeCopdStatus %>%
+ tabyl(smokday2) %>%
+ adorn_pct_formatting(digits = 1)
+```
+
+When surveying the results, it is reasonable to say that 35.7% of the respondents are smokers.
+
+Now, look at to the plotting of distribuition for the same variable. 
+
+```{r}
+#Plot of overall smokers/non-smokers distribuition
+smokeCopdStatus %>% 
+  ggplot(aes(x = smokday2, fill = sex)) +
+  geom_bar() +
+  labs(x = '', y = 'Count') +
+  labs(title = 'Overall Distribution of Smokers and Non-smokers ')
+```
+
+Note that after charting, there is a slight prominence for the female who say that smoking rather than the male.
+
+Similarly, a proportion of responses to a question about Chronic Obstructive Pulmonary Disease can be created via `tabyl()` function. 
+
+```{r}
+# Yield the proportion for each response from chccopd1
+smokeCopdStatus %>%
+ tabyl(chccopd1) %>%
+ adorn_pct_formatting(digits = 1)
+```
+
+When surveying the results, it is reasonable to say that 14.0% of the respondents has Chronic Obstructive Pulmonary Disease.  
+
+Let's see the plotting distribuition grouped by the sex. 
+```{r}
+#Plot of overall Copd distribuition
+smokeCopdStatus %>% 
+  ggplot(aes(x = chccopd1, fill = sex)) +
+  geom_bar() +
+  labs(x = '', y = 'Count') +
+  labs(title = 'Overall Distribution of respondents that has Copd')
+```
+
+After all the individual analysis of the cases, it is worth plotting a graph showing the relationship between the three variables, especially the proportion of smokers who have Copd grouped by sex, in order to verify which sex has a higher occurrence of smokers than have the disease.
+
+For this, see the graph where the horizontal axis represents the ratio, the vertical axis represents the smoke frequency and the 'Yes' and 'No' frames represent the responses to Copd.
+
+```{r}
+#Plot graph with relationship between the three variables
+smokeCopdStatus %>% 
+  ggplot(aes(x = smokday2, fill = sex)) + 
+  geom_bar(position = "fill") + 
+  scale_fill_discrete(name = "Sex") + 
+  facet_wrap(~chccopd1) +
+  xlab("Smoking frequence") + 
+  ylab("Proportion") +
+  coord_flip()
+```
+
+Again it is noted a slight prominence for the smoker female who has Copd.
+
+To obtain the answer to the original question, the proportion of respondents who are smokers and who answered for Copd should be calculated. In this way, it can be verified in which of the two sexes there is a greater occurrence of smokers who have the disease
+
+Firts, for the female
+```{r}
+# Yield the proportion female who are smoker and answered about Copd
+smokeCopdStatus %>%
+ filter(sex == "Female")  %>% 
+ #Filters only respondents who are smokers
+ filter(smokday2 != "Not at all")  %>% 
+ tabyl(chccopd1) %>%
+ adorn_pct_formatting(digits = 1)
+
+```
+
+Finally, for the male
+```{r}
+# Yield the proportion female who are smoker and answered about Copd
+smokeCopdStatus %>%
+ filter(sex == "Male")  %>% 
+ #Filters only respondents who are smokers
+ filter(smokday2 != "Not at all")  %>% 
+ tabyl(chccopd1) %>%
+ adorn_pct_formatting(digits = 1)
+
+```
+
+The results show that there is a percentage of 20.3% of respondents who are female smokers and have Copd, on the other hand percentage for males is 13.7%.
+
+**Research question 3:**
+ 
+  What is the average sleep time of people who have asthma but did not have any difficulty sleeping due to asthma during past 30 days?
+  
+To start the new exploration, a new dataframe called `asthma_sleep` must be created , and it contains the revealing variables for this analysis. The variables selected are `asthnow`, `asnoslep` e `sleptim1` and all _NA_ entries were omitted.
+
+```{r} 
+#Create a df containing onlythe revealing variables
+asthma_sleep <- brfss2013 %>% 
+  select(asthnow, asnoslep, sleptim1) %>% 
+  na.omit()
+head(asthma_sleep)
+```
+
+To better understand the case, it is important to look at the distribution of sleep time in order to verify some tendency of the mean and median.
+
+For this the color and histogram distribution was used according to the response to "Sleep Difficulty Due To Asthma During Past 30 Days"
+
+```{r}
+#Plot histogram distribuition
+asthma_sleep %>% 
+  ggplot(aes(x = sleptim1, fill = asnoslep)) + 
+  geom_histogram(bins = 30) +
+  scale_fill_discrete(name = "Sleep Difficulty - Past 30 days") + 
+  labs(x = 'Sleep time (h)', y = 'Count') +
+  labs(title = 'Overall Distribution sleep time ')
+```
+
+As can be noted by the plotting, there is a greater occurrence of responses that said they had no difficulty sleeping in the last 30 days due to asthma. This is highlighted by the color red.
+
+But the point is to know what the average sleep is for people who have asthma but have not had difficulty sleeping due to asthma in the last 30 days. This is important to know if there is any trend in the value of the average 
+```{r}
+#Calculate the summary for the sleep time
+asthma_sleep %>% 
+  group_by(asnoslep) %>% 
+  #filter(asnoslep != "None") %>% 
+  summarise(n = n(), median = median(sleptim1), mean = mean(sleptim1), sd = sd(sleptim1))
+
+```
+
+As can be noted, the average sleep time for people who said they had asthma but had no sleep difficulties due to illness is 7.03h and appears to be higher among the other calculated averages.
+
